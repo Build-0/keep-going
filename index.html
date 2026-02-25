@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>個人進度追蹤</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+/* ===== RESET ===== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --pri:#4A90D9;--pri-dk:#357ABD;--pri-lt:#EBF3FB;
+  --ok:#27AE60;--ok-lt:#E8F8F0;
+  --warn:#F39C12;--warn-lt:#FEF5E7;
+  --err:#E74C3C;--err-lt:#FDEDEC;
+  --grey:#95A5A6;--grey-lt:#F0F3F4;
+  --bg:#F0F4F8;--card:#FFF;--text:#2C3E50;--text2:#7F8C8D;
+  --shadow:0 2px 8px rgba(0,0,0,.08);--r:14px;
+  --header-h:auto;--nav-h:56px;
+}
+html{-webkit-tap-highlight-color:transparent}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Microsoft JhengHei",sans-serif;
+  background:var(--bg);color:var(--text);line-height:1.5;
+  height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden;
+}
+a{color:var(--pri);text-decoration:none}
+
+/* ===== HEADER ===== */
+.header{
+  background:linear-gradient(135deg,#4A90D9,#357ABD);
+  color:#fff;padding:10px 16px 8px;flex-shrink:0;
+  box-shadow:0 2px 12px rgba(74,144,217,.3);
+}
+.header-row{display:flex;align-items:center;justify-content:center;gap:6px}
+.header h1{font-size:16px;text-align:center;margin-bottom:6px;font-weight:600}
+.header .nav-btn{
+  width:32px;height:32px;border-radius:50%;border:none;
+  background:rgba(255,255,255,.2);color:#fff;font-size:14px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+}
+.header .nav-btn:active{background:rgba(255,255,255,.4)}
+.date-display{
+  font-size:15px;font-weight:600;min-width:150px;text-align:center;
+  padding:4px 10px;border-radius:8px;background:rgba(255,255,255,.15);
+  position:relative;cursor:pointer;
+}
+.date-display input[type="date"]{
+  position:absolute;inset:0;opacity:0;cursor:pointer;font-size:16px;width:100%;
+}
+.today-btn{font-size:11px!important;width:auto!important;padding:0 10px!important;border-radius:16px!important;white-space:nowrap}
+/* Day type toggle */
+.day-type-row{display:flex;justify-content:center;gap:8px;margin-top:6px}
+.day-type-btn{
+  padding:4px 16px;border-radius:20px;border:2px solid rgba(255,255,255,.4);
+  background:transparent;color:rgba(255,255,255,.7);font-size:12px;font-weight:600;
+  cursor:pointer;transition:all .2s;
+}
+.day-type-btn.active-work{background:#fff;color:var(--pri);border-color:#fff}
+.day-type-btn.active-rest{background:#2ECC71;color:#fff;border-color:#2ECC71}
+/* Progress */
+.progress-row{margin-top:6px;display:flex;align-items:center;gap:8px}
+.progress-bar{flex:1;height:16px;background:rgba(255,255,255,.2);border-radius:10px;overflow:hidden;position:relative}
+.progress-fill{height:100%;border-radius:10px;background:linear-gradient(90deg,#2ECC71,#27AE60);transition:width .4s}
+.progress-lbl{font-size:11px;font-weight:700;white-space:nowrap;min-width:70px;text-align:right}
+
+/* ===== TAB CONTENT ===== */
+.tab-area{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 12px 16px}
+.tab-pane{display:none;max-width:520px;margin:0 auto}
+.tab-pane.active{display:block}
+
+/* ===== BOTTOM NAV ===== */
+.bottom-nav{
+  flex-shrink:0;display:flex;background:#fff;
+  box-shadow:0 -2px 10px rgba(0,0,0,.08);
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.nav-item{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:6px 0 4px;cursor:pointer;color:var(--text2);font-size:10px;font-weight:500;
+  transition:color .2s;border:none;background:none;
+}
+.nav-item .nav-icon{font-size:20px;margin-bottom:1px}
+.nav-item.active{color:var(--pri)}
+.nav-item.active .nav-icon{transform:scale(1.1)}
+
+/* ===== CARDS ===== */
+.card{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);margin-bottom:12px;padding:16px}
+.card h3{font-size:16px;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.section-info{font-size:12px;color:var(--text2);margin-bottom:10px}
+
+/* ===== OVERVIEW GRID ===== */
+.overview-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.ov-card{
+  background:var(--card);border-radius:12px;box-shadow:var(--shadow);
+  padding:14px;cursor:pointer;transition:transform .15s;
+  display:flex;flex-direction:column;align-items:center;text-align:center;
+}
+.ov-card:active{transform:scale(.97)}
+.ov-icon{font-size:28px;margin-bottom:4px}
+.ov-title{font-size:12px;color:var(--text2);margin-bottom:4px}
+.ov-value{font-size:20px;font-weight:700}
+.ov-bar{width:100%;height:6px;background:#eee;border-radius:3px;margin-top:6px;overflow:hidden}
+.ov-bar-fill{height:100%;border-radius:3px;transition:width .4s}
+.ov-card.full-width{grid-column:1/-1}
+
+/* ===== ACT SECTION ===== */
+.act-dots{display:flex;gap:10px;justify-content:center;margin:12px 0}
+.act-dot{
+  width:48px;height:48px;border-radius:50%;border:3px solid var(--pri);
+  background:#fff;cursor:pointer;transition:all .2s;
+  display:flex;align-items:center;justify-content:center;font-size:20px;color:transparent;
+}
+.act-dot.filled{background:var(--pri);color:#fff;border-color:var(--pri-dk);box-shadow:0 2px 8px rgba(74,144,217,.3)}
+.act-dot:active{transform:scale(.9)}
+.act-label{text-align:center;font-size:28px;font-weight:700;color:var(--pri)}
+.act-sub{text-align:center;font-size:12px;color:var(--text2);margin-bottom:4px}
+.act-tools{margin-top:12px;background:var(--pri-lt);border-radius:10px;overflow:hidden}
+.act-tools summary{padding:10px 14px;cursor:pointer;font-size:13px;font-weight:500;color:var(--pri-dk)}
+.act-tools ol{padding:0 14px 12px 30px;font-size:13px}
+.act-tools li{margin-bottom:6px}
+.act-tools strong{color:var(--pri-dk)}
+
+/* ===== EXERCISES ===== */
+.ex-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f0f0f0}
+.ex-item:last-child{border-bottom:none}
+.ex-info{flex:1;min-width:0}
+.ex-name{font-size:14px;font-weight:600;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.ex-target{font-size:12px;color:var(--text2)}
+.set-ctr{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.set-ctr button{
+  width:34px;height:34px;border-radius:50%;border:2px solid var(--pri);
+  background:#fff;color:var(--pri);font-size:18px;font-weight:700;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+}
+.set-ctr button:active{background:var(--pri);color:#fff}
+.set-ctr .cnt{min-width:28px;text-align:center;font-size:18px;font-weight:700}
+.opt-toggle summary{cursor:pointer;font-size:13px;color:var(--pri);font-weight:500;padding:8px 0}
+
+/* ===== JJ ===== */
+.jj-ctr{display:flex;align-items:center;justify-content:center;gap:14px;margin:8px 0}
+.jj-ctr button{
+  width:48px;height:48px;border-radius:50%;border:2px solid var(--pri);
+  background:#fff;color:var(--pri);font-size:22px;font-weight:700;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+}
+.jj-ctr button:active{background:var(--pri);color:#fff}
+.jj-val{font-size:28px;font-weight:700;min-width:70px;text-align:center}
+.jj-val span{color:var(--text2);font-size:16px;font-weight:400}
+
+/* ===== SUPPLEMENTS ===== */
+.supp-grp{margin-bottom:14px}
+.supp-grp:last-child{margin-bottom:0}
+.supp-grp-hdr{font-size:13px;font-weight:600;color:var(--text2);margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #eee}
+.supp-item{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid #f8f8f8}
+.supp-item:last-child{border-bottom:none}
+.supp-chk input{display:none}
+.supp-chk label{
+  display:flex;width:28px;height:28px;border-radius:7px;border:2px solid #ccc;
+  cursor:pointer;align-items:center;justify-content:center;font-size:14px;
+  color:transparent;transition:all .2s;margin-top:2px;
+}
+.supp-chk input:checked+label{background:var(--ok);border-color:var(--ok);color:#fff}
+.supp-det{flex:1;min-width:0}
+.supp-nm{font-size:13px;font-weight:600;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.supp-meta{font-size:11px;color:var(--text2)}
+.pri-badge{display:inline-block;font-size:10px;padding:1px 6px;border-radius:8px;font-weight:600}
+.pri-must{background:var(--err-lt);color:var(--err)}
+.pri-bonus{background:var(--warn-lt);color:var(--warn)}
+.pri-opt{background:var(--grey-lt);color:var(--grey)}
+
+/* ===== MEALS ===== */
+.meal-grp{margin-bottom:14px}
+.meal-grp:last-child{margin-bottom:0}
+.meal-grp label{display:block;font-size:14px;font-weight:600;margin-bottom:4px}
+.meal-grp textarea{
+  width:100%;min-height:80px;border:2px solid #e0e0e0;border-radius:10px;
+  padding:10px 12px;font-size:14px;font-family:inherit;resize:vertical;
+  transition:border-color .2s;line-height:1.5;
+}
+.meal-grp textarea:focus{outline:none;border-color:var(--pri)}
+
+/* ===== BUTTONS ===== */
+.btn{
+  padding:10px 20px;border:none;border-radius:10px;font-size:14px;font-weight:600;
+  cursor:pointer;display:flex;align-items:center;gap:6px;justify-content:center;
+  transition:all .15s;width:100%;
+}
+.btn:active{transform:scale(.97)}
+.btn-pri{background:var(--pri);color:#fff}
+.btn-ok{background:var(--ok);color:#fff}
+.btn-err{background:#f8f8f8;color:var(--err)}
+.btn-row{display:flex;gap:10px;margin-bottom:10px}
+.btn-row .btn{flex:1}
+
+/* ===== MODAL ===== */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:300;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.show{display:flex}
+.modal-box{background:#fff;border-radius:16px;padding:24px;max-width:320px;width:100%;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.2)}
+.modal-box h3{margin-bottom:8px;font-size:18px}
+.modal-box p{font-size:14px;color:var(--text2);margin-bottom:16px}
+.modal-btns{display:flex;gap:10px}
+.modal-btns .btn{flex:1}
+.month-picker{margin:12px 0}
+.month-picker select{font-size:16px;padding:8px 12px;border-radius:8px;border:2px solid #e0e0e0;font-family:inherit}
+
+/* ===== SAVE TOAST ===== */
+.save-toast{
+  position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:200;
+  background:var(--ok);color:#fff;padding:4px 14px;border-radius:20px;
+  font-size:12px;font-weight:500;opacity:0;transition:opacity .3s;pointer-events:none;
+}
+.save-toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<div class="save-toast" id="saveToast">✓ 已儲存</div>
+
+<!-- ===== HEADER ===== -->
+<div class="header">
+  <h1>📋 個人進度追蹤</h1>
+  <div class="header-row">
+    <button class="nav-btn" onclick="changeDate(-1)">◀</button>
+    <div class="date-display" id="dateDisplay">
+      <span id="dateText"></span>
+      <input type="date" id="datePicker" onchange="jumpToDate(this.value)">
+    </div>
+    <button class="nav-btn" onclick="changeDate(1)">▶</button>
+    <button class="nav-btn today-btn" onclick="goToday()">今天</button>
+  </div>
+  <div class="day-type-row">
+    <button class="day-type-btn" id="btnWork" onclick="setDayType('work')">💼 上班日</button>
+    <button class="day-type-btn" id="btnRest" onclick="setDayType('rest')">🌴 休息日</button>
+  </div>
+  <div class="progress-row">
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="progress-lbl" id="progressLbl">0/0</div>
+  </div>
+</div>
+
+<!-- ===== TAB CONTENT ===== -->
+<div class="tab-area" id="tabArea">
+
+  <!-- TAB: 總覽 -->
+  <div class="tab-pane active" id="paneOverview">
+    <div class="overview-grid" id="overviewGrid"></div>
+    <div class="card">
+      <h3>📊 匯出與備份</h3>
+      <div class="btn-row">
+        <button class="btn btn-pri" onclick="showExportModal()">📊 匯出月度 Excel</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-ok" onclick="exportBackupJSON()">💾 備份全部 JSON</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn" style="background:#f0f0f0" onclick="document.getElementById('importFile').click()">📂 匯入備份 JSON</button>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importBackupJSON(this)">
+      </div>
+      <div class="btn-row" style="margin-bottom:0">
+        <button class="btn btn-err" onclick="showClearModal()">🗑️ 清除今日數據</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: 正念 ACT -->
+  <div class="tab-pane" id="paneACT">
+    <div class="card">
+      <h3>🧠 正念注意力訓練 + ACT</h3>
+      <p class="section-info">目標：外面出現 → 拉返少少入面，慢慢由 20% → 40% → 60%</p>
+      <div class="act-label" id="actLabel">0 / 5</div>
+      <div class="act-sub">點擊圓圈記錄拉回次數</div>
+      <div class="act-dots" id="actDots"></div>
+      <div class="act-tools">
+        <details>
+          <summary>📖 拉回流程提醒</summary>
+          <ol>
+            <li><strong>工具 A：命名（1秒）</strong><br>「哦，監控模式又開咗。」</li>
+            <li><strong>工具 B：錨點（10-20秒）</strong><br>揀一個身體位置做錨：腳底 / 手指 / 背脊貼椅<br>（只需要「感覺到」佢，唔使放鬆）</li>
+            <li><strong>工具 C：回收動作（5秒）</strong><br>輕壓腳趾 / 手指捏一下 / 肩向後收一下<br>俾大腦一個「鏡頭返嚟」嘅信號</li>
+          </ol>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: 訓練 -->
+  <div class="tab-pane" id="paneTraining">
+    <div class="card">
+      <h3>💪 核心訓練</h3>
+      <p class="section-info">建議時間：11:30 - 12:30（每天）</p>
+      <div id="mainExercises"></div>
+      <details class="opt-toggle">
+        <summary>📋 可選動作</summary>
+        <div id="optionalExercises"></div>
+      </details>
+    </div>
+    <div class="card">
+      <h3>🏃 開合跳</h3>
+      <p class="section-info">一周 3-4 次 ｜ 20秒 → 休息40秒 → 8輪 = 8分鐘</p>
+      <div class="jj-ctr">
+        <button onclick="adjustJJ(-1)">−</button>
+        <div class="jj-val"><span id="jjCount">0</span><span> / 8 輪</span></div>
+        <button onclick="adjustJJ(1)">+</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: 保健 -->
+  <div class="tab-pane" id="paneSupplement">
+    <div class="card" style="padding-bottom:8px">
+      <h3>💊 保健品服用 <span style="font-size:13px;color:var(--text2);font-weight:400" id="suppBadge">0/15</span></h3>
+      <div id="supplementList"></div>
+    </div>
+  </div>
+
+  <!-- TAB: 飲食 -->
+  <div class="tab-pane" id="paneMeals">
+    <div class="card">
+      <h3>🍽️ 飲食記錄</h3>
+      <div class="meal-grp">
+        <label>🌞 午餐</label>
+        <textarea id="mealLunch" placeholder="記錄午餐內容..." oninput="onMealInput()"></textarea>
+      </div>
+      <div class="meal-grp">
+        <label>🌙 晚餐</label>
+        <textarea id="mealDinner" placeholder="記錄晚餐內容..." oninput="onMealInput()"></textarea>
+      </div>
+      <div class="meal-grp">
+        <label>🌃 宵夜</label>
+        <textarea id="mealLatenight" placeholder="記錄宵夜內容..." oninput="onMealInput()"></textarea>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ===== BOTTOM NAV ===== -->
+<nav class="bottom-nav">
+  <button class="nav-item active" data-tab="paneOverview" onclick="switchTab('paneOverview',this)">
+    <span class="nav-icon">📊</span>總覽
+  </button>
+  <button class="nav-item" data-tab="paneACT" onclick="switchTab('paneACT',this)">
+    <span class="nav-icon">🧠</span>正念
+  </button>
+  <button class="nav-item" data-tab="paneTraining" onclick="switchTab('paneTraining',this)">
+    <span class="nav-icon">💪</span>訓練
+  </button>
+  <button class="nav-item" data-tab="paneSupplement" onclick="switchTab('paneSupplement',this)">
+    <span class="nav-icon">💊</span>保健
+  </button>
+  <button class="nav-item" data-tab="paneMeals" onclick="switchTab('paneMeals',this)">
+    <span class="nav-icon">🍽️</span>飲食
+  </button>
+</nav>
+
+<!-- ===== MODALS ===== -->
+<div class="modal-overlay" id="clearModal">
+  <div class="modal-box">
+    <h3>⚠️ 確認清除</h3>
+    <p>確定要清除今日所有數據嗎？此操作無法復原。</p>
+    <div class="modal-btns">
+      <button class="btn btn-err" onclick="confirmClear()">確定清除</button>
+      <button class="btn" style="background:#eee" onclick="hideModal('clearModal')">取消</button>
+    </div>
+  </div>
+</div>
+<div class="modal-overlay" id="exportModal">
+  <div class="modal-box">
+    <h3>📊 匯出月度報表</h3>
+    <div class="month-picker">
+      <select id="exportYear"></select>
+      <select id="exportMonth"></select>
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-pri" onclick="doExport()">匯出 Excel</button>
+      <button class="btn" style="background:#eee" onclick="hideModal('exportModal')">取消</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================================================================
+   DATA DEFINITIONS
+   ================================================================ */
+const MAIN_EX = [
+  {id:'deadbug',name:'死蟲式 Dead Bug',target:'3組×10次/側',video:'https://youtu.be/PxUJ9jJ18tY?si=deZSvw_mcBlGmvEe'},
+  {id:'birddog',name:'鳥狗式 Bird-Dog',target:'3組×10次/側',video:'https://www.youtube.com/watch?v=vRYf25I6uYo'},
+  {id:'glutebridge',name:'臀橋 Glute Bridge',target:'3組×15次',video:'https://youtu.be/abP4ZFSc6Vs?si=9tMLOpNJSTkq8xqZ'},
+  {id:'plank',name:'平板撐 Plank（膝蓋）',target:'3組×30秒',video:null},
+];
+const OPT_EX = [
+  {id:'catcow',name:'貓牛式 Cat-Cow',target:'20次（熱身）',video:'https://youtu.be/nGFe2xwdTB8?si=4_aD0leUd7kxC0Q1'},
+  {id:'toetap',name:'仰臥點地 Toe Tap',target:'12次×2-3組',video:null},
+  {id:'clamshell',name:'側臥蚌殼式 Clamshell',target:'每邊15次×2組',video:'https://www.youtube.com/watch?v=rESyd6azAnY'},
+  {id:'singleglute',name:'單腳臀橋',target:'每側10-12次×2-3組',video:null},
+  {id:'wallpelvic',name:'靠牆骨盆後傾',target:'10秒×5次',video:'https://www.youtube.com/watch?v=sK5BV55tdjA'},
+  {id:'officestretch',name:'上班伸展操',target:'跟影片',video:'https://www.youtube.com/watch?v=kGHLpF7OmHk&t=11s'},
+];
+const SUPPS = [
+  {id:'zinc_am',time:'10:30',name:'鋅肌肽 PepZin GI',brand:"Doctor's Best",dose:'2粒 (16mg鋅)',pri:'must',note:'空腹黏附胃壁修復',grp:'morning'},
+  {id:'probiotic',time:'10:50',name:'益生菌',brand:'G-NiiB MX XTRA',dose:'1包',pri:'bonus',note:'修復腸道菌群',grp:'morning'},
+  {id:'nac',time:'11:30',name:'NAC緩釋',brand:'Jarrow Sustain',dose:'1粒 (600mg)',pri:'bonus',note:'護肝排毒+谷氨酸調節',grp:'morning'},
+  {id:'vitc',time:'12:30',name:'維C緩衝型',brand:'NOW C-1000',dose:'1粒 (1000mg)',pri:'bonus',note:'補胃炎消耗+增強鐵吸收',grp:'morning'},
+  {id:'milkthistle',time:'12:30',name:'水飛薊素',brand:'Jarrow Milk Thistle',dose:'2粒 (240mg)',pri:'bonus',note:'肝細胞保護',grp:'morning'},
+  {id:'maca',time:'12:30',name:'馬卡',brand:'NOW Raw Maca 750mg',dose:'1粒 (4500mg等效)',pri:'optional',note:'抗疲勞（試用2週評估）',grp:'morning'},
+  {id:'ginseng',time:'14:00-16:00',name:'西洋參膠囊',brand:'NOW 500mg',dose:'2粒 (1000mg)',pri:'optional',note:'下午提神',grp:'afternoon'},
+  {id:'bcomplex',time:'17:30',name:'B群',brand:'Thorne Basic B',dose:'1粒',pri:'must',note:'P5P合成血清素',grp:'afternoon'},
+  {id:'fishoil',time:'19:00',name:'魚油',brand:'GNC Triple Strength',dose:'1粒 (1000mg ω-3)',pri:'must',note:'EPA抗抑鬱+保護胃黏膜',grp:'evening'},
+  {id:'d3',time:'19:00',name:'D3',brand:'NatureWise',dose:'家5000IU / 公司2000IU',pri:'must',note:'補中班零日照',grp:'evening'},
+  {id:'k2',time:'19:00',name:'K2 MK-7',brand:'NOW MenaQ7\u00ae',dose:'1粒 (100mcg)',pri:'bonus',note:'D3搭檔，指揮鈣入骨',grp:'evening'},
+  {id:'copper',time:'19:00',name:'銅',brand:'Solgar螯合銅',dose:'1粒 (2.5mg)',pri:'bonus',note:'平衡32mg鋅',grp:'evening'},
+  {id:'sertraline',time:'01:50',name:'Sertraline',brand:'Hovid SETROF',dose:'1片 (50mg)',pri:'must',note:'定海神針',grp:'bedtime'},
+  {id:'magnesium',time:'02:10',name:'甘氨酸鎂',brand:"家Solaray / 公司Doctor's Best",dose:'2粒 (175-200mg)',pri:'must',note:'助眠+抗焦慮+肌肉放鬆',grp:'bedtime'},
+  {id:'zinc_pm',time:'02:10',name:'鋅肌肽 PepZin GI（晚）',brand:"Doctor's Best",dose:'2粒 (16mg鋅)',pri:'must',note:'睡眠深度修復胃壁',grp:'bedtime'},
+];
+const SUPP_GRPS = [
+  {key:'morning',label:'☀️ 早上 10:30 - 12:30'},
+  {key:'afternoon',label:'🌤️ 下午 14:00 - 17:30'},
+  {key:'evening',label:'🌙 晚上 19:00'},
+  {key:'bedtime',label:'😴 睡前 01:50 - 02:10'},
+];
+const PRI_MAP = {must:{l:'⭐必吃',c:'pri-must'},bonus:{l:'加分',c:'pri-bonus'},optional:{l:'可不吃',c:'pri-opt'}};
+const WKDAYS = ['日','一','二','三','四','五','六'];
+
+/* ================================================================
+   STATE
+   ================================================================ */
+let curDate = new Date();
+let dd = {};
+let saveT = null;
+const PFX = 'tracker_';
+
+/* ================================================================
+   INIT
+   ================================================================ */
+document.addEventListener('DOMContentLoaded', () => {
+  buildACTDots();
+  buildExercises();
+  buildSupplements();
+  populateExportSel();
+  loadAndRender();
+  // Auto-save default record for today
+  const todayStr = dateStr(new Date());
+  if (!localStorage.getItem(PFX + todayStr)) {
+    localStorage.setItem(PFX + todayStr, JSON.stringify(getDefault()));
+  }
+});
+
+/* ================================================================
+   TAB SWITCHING
+   ================================================================ */
+function switchTab(paneId, btn) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.getElementById(paneId).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tabArea').scrollTop = 0;
+}
+
+/* ================================================================
+   DATE
+   ================================================================ */
+function dateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function dateCN(d) {
+  return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}（${WKDAYS[d.getDay()]}）`;
+}
+function changeDate(n) { curDate.setDate(curDate.getDate()+n); loadAndRender(); }
+function goToday() { curDate = new Date(); loadAndRender(); }
+function jumpToDate(v) { if(!v)return; const p=v.split('-'); curDate=new Date(+p[0],+p[1]-1,+p[2]); loadAndRender(); }
+
+/* ================================================================
+   DATA
+   ================================================================ */
+function getDefault() {
+  const d = {dayType:'work', act:0, core:{}, jj:0, supplements:{}, meals:{lunch:'',dinner:'',latenight:''}};
+  [...MAIN_EX,...OPT_EX].forEach(e => d.core[e.id]=0);
+  SUPPS.forEach(s => d.supplements[s.id]=false);
+  return d;
+}
+function loadDay(ds) {
+  const raw = localStorage.getItem(PFX+ds);
+  const def = getDefault();
+  if (!raw) return def;
+  try {
+    const p = JSON.parse(raw);
+    for (const k in def) {
+      if (p[k]===undefined) p[k]=def[k];
+      if (typeof def[k]==='object'&&!Array.isArray(def[k])) {
+        for (const sk in def[k]) { if(p[k][sk]===undefined) p[k][sk]=def[k][sk]; }
+      }
+    }
+    return p;
+  } catch { return def; }
+}
+function save() {
+  clearTimeout(saveT);
+  saveT = setTimeout(() => {
+    localStorage.setItem(PFX+dateStr(curDate), JSON.stringify(dd));
+    const el=document.getElementById('saveToast');el.classList.add('show');setTimeout(()=>el.classList.remove('show'),1000);
+  }, 250);
+}
+function loadAndRender() {
+  dd = loadDay(dateStr(curDate));
+  document.getElementById('dateText').textContent = dateCN(curDate);
+  document.getElementById('datePicker').value = dateStr(curDate);
+  renderAll();
+}
+
+/* ================================================================
+   RENDER
+   ================================================================ */
+function renderAll() {
+  renderDayType();
+  renderACT();
+  renderExercises();
+  renderJJ();
+  renderSupplements();
+  renderMeals();
+  renderProgress();
+  renderOverview();
+}
+function renderDayType() {
+  const w=document.getElementById('btnWork'),r=document.getElementById('btnRest');
+  w.className='day-type-btn'+(dd.dayType==='work'?' active-work':'');
+  r.className='day-type-btn'+(dd.dayType==='rest'?' active-rest':'');
+}
+function renderACT() {
+  const c=dd.act||0;
+  document.getElementById('actLabel').textContent=`${c} / 5`;
+  document.querySelectorAll('.act-dot').forEach((dot,i)=>{
+    dot.classList.toggle('filled',i<c); dot.textContent=i<c?'✓':'';
+  });
+}
+function renderExercises() {
+  [...MAIN_EX,...OPT_EX].forEach(e=>{
+    const el=document.getElementById('cnt_'+e.id); if(el) el.textContent=dd.core[e.id]||0;
+  });
+}
+function renderJJ() { document.getElementById('jjCount').textContent=dd.jj||0; }
+function renderSupplements() {
+  let ck=0;
+  SUPPS.forEach(s=>{const cb=document.getElementById('sp_'+s.id);if(cb){cb.checked=!!dd.supplements[s.id];if(cb.checked)ck++;}});
+  document.getElementById('suppBadge').textContent=`${ck}/${SUPPS.length}`;
+}
+function renderMeals() {
+  document.getElementById('mealLunch').value=dd.meals.lunch||'';
+  document.getElementById('mealDinner').value=dd.meals.dinner||'';
+  document.getElementById('mealLatenight').value=dd.meals.latenight||'';
+}
+function renderProgress() {
+  let t=0,d=0;
+  t++;if(dd.act>0)d++;
+  MAIN_EX.forEach(e=>{t++;if((dd.core[e.id]||0)>0)d++;});
+  t++;if(dd.jj>0)d++;
+  SUPPS.forEach(s=>{t++;if(dd.supplements[s.id])d++;});
+  ['lunch','dinner','latenight'].forEach(m=>{t++;if((dd.meals[m]||'').trim())d++;});
+  const pct=t>0?Math.round(d/t*100):0;
+  document.getElementById('progressFill').style.width=pct+'%';
+  document.getElementById('progressLbl').textContent=`${d}/${t}（${pct}%）`;
+}
+function renderOverview() {
+  // Calculate stats
+  const actDone=dd.act||0;
+  let coreDone=0; MAIN_EX.forEach(e=>{if((dd.core[e.id]||0)>0)coreDone++;});
+  const jjDone=dd.jj||0;
+  let suppDone=0; SUPPS.forEach(s=>{if(dd.supplements[s.id])suppDone++;});
+  let mealDone=0; ['lunch','dinner','latenight'].forEach(m=>{if((dd.meals[m]||'').trim())mealDone++;});
+
+  const cards = [
+    {icon:'🧠',title:'正念 ACT',val:`${actDone}/5`,pct:actDone/5*100,color:'var(--pri)',tab:'paneACT'},
+    {icon:'💪',title:'核心訓練',val:`${coreDone}/${MAIN_EX.length}`,pct:coreDone/MAIN_EX.length*100,color:'#E67E22',tab:'paneTraining'},
+    {icon:'🏃',title:'開合跳',val:`${jjDone}/8 輪`,pct:jjDone/8*100,color:'#9B59B6',tab:'paneTraining'},
+    {icon:'💊',title:'保健品',val:`${suppDone}/${SUPPS.length}`,pct:suppDone/SUPPS.length*100,color:'var(--ok)',tab:'paneSupplement'},
+    {icon:'🍽️',title:'飲食記錄',val:`${mealDone}/3`,pct:mealDone/3*100,color:'#F39C12',tab:'paneMeals'},
+  ];
+  const grid=document.getElementById('overviewGrid');
+  grid.innerHTML='';
+  cards.forEach(c=>{
+    const el=document.createElement('div');
+    el.className='ov-card';
+    el.onclick=()=>{
+      const btn=document.querySelector(`.nav-item[data-tab="${c.tab}"]`);
+      if(btn) switchTab(c.tab,btn);
+    };
+    el.innerHTML=`
+      <div class="ov-icon">${c.icon}</div>
+      <div class="ov-title">${c.title}</div>
+      <div class="ov-value">${c.val}</div>
+      <div class="ov-bar"><div class="ov-bar-fill" style="width:${Math.min(c.pct,100)}%;background:${c.color}"></div></div>`;
+    grid.appendChild(el);
+  });
+  // Day type card (full width)
+  const dtCard=document.createElement('div');
+  dtCard.className='ov-card full-width';
+  dtCard.innerHTML=`<div class="ov-icon">${dd.dayType==='work'?'💼':'🌴'}</div><div class="ov-value">${dd.dayType==='work'?'上班日':'休息日'}</div>`;
+  grid.appendChild(dtCard);
+}
+
+/* ================================================================
+   BUILD UI
+   ================================================================ */
+function buildACTDots() {
+  const c=document.getElementById('actDots');
+  for(let i=0;i<5;i++){
+    const dot=document.createElement('div');dot.className='act-dot';
+    dot.addEventListener('click',()=>{dd.act=dd.act===i+1?i:i+1;renderACT();renderProgress();renderOverview();save();});
+    c.appendChild(dot);
+  }
+}
+function mkExItem(ex) {
+  const d=document.createElement('div');d.className='ex-item';
+  const vl=ex.video?`<a href="${ex.video}" target="_blank" rel="noopener">🎬</a>`:'';
+  d.innerHTML=`<div class="ex-info"><div class="ex-name">${ex.name} ${vl}</div><div class="ex-target">${ex.target}</div></div>
+    <div class="set-ctr"><button onclick="adjEx('${ex.id}',-1)">−</button><div class="cnt" id="cnt_${ex.id}">0</div><button onclick="adjEx('${ex.id}',1)">+</button></div>`;
+  return d;
+}
+function buildExercises() {
+  const m=document.getElementById('mainExercises');MAIN_EX.forEach(e=>m.appendChild(mkExItem(e)));
+  const o=document.getElementById('optionalExercises');OPT_EX.forEach(e=>o.appendChild(mkExItem(e)));
+}
+function buildSupplements() {
+  const con=document.getElementById('supplementList');
+  SUPP_GRPS.forEach(g=>{
+    const items=SUPPS.filter(s=>s.grp===g.key);if(!items.length)return;
+    const gd=document.createElement('div');gd.className='supp-grp';
+    gd.innerHTML=`<div class="supp-grp-hdr">${g.label}</div>`;
+    items.forEach(s=>{
+      const p=PRI_MAP[s.pri];
+      const it=document.createElement('div');it.className='supp-item';
+      it.innerHTML=`<div class="supp-chk"><input type="checkbox" id="sp_${s.id}" onchange="onSupp('${s.id}',this.checked)"><label for="sp_${s.id}">✓</label></div>
+        <div class="supp-det"><div class="supp-nm">${s.name} <span class="pri-badge ${p.c}">${p.l}</span></div>
+        <div class="supp-meta">${s.time} ｜ ${s.brand} ｜ ${s.dose}</div>
+        <div class="supp-meta" style="color:#aaa">${s.note}</div></div>`;
+      gd.appendChild(it);
+    });
+    con.appendChild(gd);
+  });
+}
+
+/* ================================================================
+   INTERACTIONS
+   ================================================================ */
+function setDayType(t){dd.dayType=t;renderDayType();renderOverview();save();}
+function adjEx(id,n){dd.core[id]=Math.max(0,(dd.core[id]||0)+n);renderExercises();renderProgress();renderOverview();save();}
+function adjustJJ(n){dd.jj=Math.max(0,Math.min(20,(dd.jj||0)+n));renderJJ();renderProgress();renderOverview();save();}
+function onSupp(id,v){dd.supplements[id]=v;renderSupplements();renderProgress();renderOverview();save();}
+function onMealInput(){
+  dd.meals.lunch=document.getElementById('mealLunch').value;
+  dd.meals.dinner=document.getElementById('mealDinner').value;
+  dd.meals.latenight=document.getElementById('mealLatenight').value;
+  renderProgress();renderOverview();save();
+}
+
+/* ================================================================
+   MODALS
+   ================================================================ */
+function showClearModal(){document.getElementById('clearModal').classList.add('show');}
+function hideModal(id){document.getElementById(id).classList.remove('show');}
+function confirmClear(){dd=getDefault();localStorage.removeItem(PFX+dateStr(curDate));renderAll();hideModal('clearModal');}
+function showExportModal(){
+  document.getElementById('exportYear').value=curDate.getFullYear();
+  document.getElementById('exportMonth').value=curDate.getMonth()+1;
+  document.getElementById('exportModal').classList.add('show');
+}
+
+/* ================================================================
+   EXPORT / IMPORT
+   ================================================================ */
+function populateExportSel(){
+  const ys=document.getElementById('exportYear'),ms=document.getElementById('exportMonth');
+  const cy=new Date().getFullYear();
+  for(let y=cy-2;y<=cy+1;y++) ys.innerHTML+=`<option value="${y}">${y}年</option>`;
+  ys.value=cy;
+  for(let m=1;m<=12;m++) ms.innerHTML+=`<option value="${m}">${m}月</option>`;
+  ms.value=new Date().getMonth()+1;
+}
+function doExport(){
+  const yr=+document.getElementById('exportYear').value,mo=+document.getElementById('exportMonth').value;
+  const dim=new Date(yr,mo,0).getDate();
+  const hdr=['日期','星期','上班/休息','ACT拉回(X/5)'];
+  MAIN_EX.forEach(e=>hdr.push(e.name+'(組)'));
+  hdr.push('開合跳(輪)');
+  SUPPS.forEach(s=>hdr.push(s.name));
+  hdr.push('午餐','晚餐','宵夜');
+  const rows=[hdr];
+  for(let d=1;d<=dim;d++){
+    const ds=`${yr}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const data=loadDay(ds);
+    const dow=WKDAYS[new Date(yr,mo-1,d).getDay()];
+    const row=[`${mo}/${d}`,dow,data.dayType==='rest'?'休息日':'上班日',data.act||0];
+    MAIN_EX.forEach(e=>row.push(data.core[e.id]||0));
+    row.push(data.jj||0);
+    SUPPS.forEach(s=>row.push(data.supplements[s.id]?'✓':''));
+    row.push(data.meals.lunch||'',data.meals.dinner||'',data.meals.latenight||'');
+    rows.push(row);
+  }
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=hdr.map((h,i)=>{
+    if(i===0)return{wch:7};if(i===1)return{wch:4};if(i===2)return{wch:8};
+    if(h.includes('午餐')||h.includes('晚餐')||h.includes('宵夜'))return{wch:30};
+    return{wch:Math.max(h.length*1.8,8)};
+  });
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,`${yr}年${mo}月`);
+  XLSX.writeFile(wb,`進度追蹤_${yr}年${mo}月.xlsx`);
+  hideModal('exportModal');
+}
+function exportBackupJSON(){
+  const bk={};
+  for(let i=0;i<localStorage.length;i++){
+    const k=localStorage.key(i);
+    if(k.startsWith(PFX)){try{bk[k]=JSON.parse(localStorage.getItem(k));}catch{}}
+  }
+  const blob=new Blob([JSON.stringify(bk,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`進度追蹤_備份_${dateStr(new Date())}.json`;a.click();
+}
+function importBackupJSON(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const data=JSON.parse(e.target.result);
+      let count=0;
+      for(const k in data){
+        if(k.startsWith(PFX)){localStorage.setItem(k,JSON.stringify(data[k]));count++;}
+      }
+      loadAndRender();
+      const el=document.getElementById('saveToast');el.textContent=`✓ 已匯入 ${count} 天記錄`;
+      el.classList.add('show');setTimeout(()=>{el.classList.remove('show');el.textContent='✓ 已儲存';},2000);
+    }catch{
+      const el=document.getElementById('saveToast');el.textContent='❌ 檔案格式錯誤';el.style.background='var(--err)';
+      el.classList.add('show');setTimeout(()=>{el.classList.remove('show');el.textContent='✓ 已儲存';el.style.background='';},2000);
+    }
+    input.value='';
+  };
+  reader.readAsText(file);
+}
+</script>
+</body>
+</html>
